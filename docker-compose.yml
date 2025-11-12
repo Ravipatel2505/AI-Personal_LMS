@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # 1. Frontend (React)
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app # Mounts your code for live updates
+      - /app/node_modules # Skips mounting node_modules
+    depends_on:
+      - api_gateway
+
+  # 2. Backend (Node.js)
+  api_gateway:
+    build: ./backend-api
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend-api:/app
+      - /app/node_modules
+      - upload-storage:/app/uploads
+    environment:
+      # These are the "addresses" for your other services
+      - MONGO_URI=mongodb://mongo:27017/lms
+      - REDIS_HOST=redis
+      - AI_SERVICE_URL=http://ai_worker:8000
+    depends_on:
+      - mongo
+      - redis
+      - ai_worker # Wait for AI worker to be ready
+
+  # 3. AI Worker (Python)
+  ai_worker:
+    build: ./ai-worker
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ai-worker:/app
+      - upload-storage:/app/uploads
+    environment:
+      - REDIS_HOST=redis
+      - QDRANT_HOST=qdrant
+      - GROQ_API_KEY="ADD_YOUR_GROQ_API_KEY_HERE"
+      - redis
+      - qdrant
+
+  # 4. Databases & Queue
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6334" # gRPC
+      - "6334:6333" # REST
+    volumes:
+      - qdrant-storage:/qdrant/storage
+
+volumes:
+  mongo-data:
+  qdrant-storage:
+  upload-storage:
